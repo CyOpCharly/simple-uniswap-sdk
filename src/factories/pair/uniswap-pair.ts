@@ -162,6 +162,9 @@ export class UniswapPair {
       ethereumAddress: this._uniswapPairContext.ethereumAddress,
       settings: this._uniswapPairContext.settings || new UniswapPairSettings(),
       ethersProvider: this._ethersProvider,
+      fromTransferFee: this._uniswapPairContext.fromTrasferFee
+        ? this._uniswapPairContext.fromTrasferFee
+        : false,
     };
 
     return new UniswapPairFactory(new CoinGecko(), uniswapFactoryContext);

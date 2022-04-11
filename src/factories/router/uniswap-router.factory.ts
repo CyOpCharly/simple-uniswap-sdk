@@ -308,7 +308,8 @@ export class UniswapRouterFactory {
    */
   public async getAllPossibleRoutesWithQuotes(
     amountToTrade: BigNumber,
-    direction: TradeDirection
+    direction: TradeDirection,
+    fromTrasferFee: boolean
   ): Promise<RouteQuote[]> {
     const tradeAmount = this.formatAmountToTrade(amountToTrade, direction);
 
@@ -382,7 +383,8 @@ export class UniswapRouterFactory {
     return this.buildRouteQuotesFromResults(
       amountToTrade,
       contractCallResults,
-      direction
+      direction,
+      fromTrasferFee
     );
   }
 
@@ -393,11 +395,13 @@ export class UniswapRouterFactory {
    */
   public async findBestRoute(
     amountToTrade: BigNumber,
-    direction: TradeDirection
+    direction: TradeDirection,
+    fromTrasferFee: boolean
   ): Promise<BestRouteQuotes> {
     let allRoutes = await this.getAllPossibleRoutesWithQuotes(
       amountToTrade,
-      direction
+      direction,
+      fromTrasferFee
     );
 
     if (allRoutes.length === 0) {
@@ -484,7 +488,8 @@ export class UniswapRouterFactory {
     ethAmountIn: BigNumber,
     tokenAmount: BigNumber,
     routeQuoteTradeContext: RouteQuoteTradeContext,
-    deadline: string
+    deadline: string,
+    transferFee: boolean = false
   ): string {
     // uniswap adds extra digits on even if the token is say 8 digits long
     const convertedMinTokens = tokenAmount
@@ -493,6 +498,16 @@ export class UniswapRouterFactory {
 
     switch (routeQuoteTradeContext.uniswapVersion) {
       case UniswapVersion.v2:
+        if (transferFee) {
+          return this._uniswapRouterContractFactoryV2.swapExactETHForTokensSupportingFeeOnTransferTokens(
+            hexlify(convertedMinTokens),
+            routeQuoteTradeContext.routePathArray.map((r) =>
+              removeEthFromContractAddress(r)
+            ),
+            this._ethereumAddress,
+            deadline
+          );
+        }
         return this._uniswapRouterContractFactoryV2.swapExactETHForTokens(
           hexlify(convertedMinTokens),
           routeQuoteTradeContext.routePathArray.map((r) =>
@@ -569,7 +584,8 @@ export class UniswapRouterFactory {
     tokenAmount: BigNumber,
     ethAmountOutMin: BigNumber,
     routeQuoteTradeContext: RouteQuoteTradeContext,
-    deadline: string
+    deadline: string,
+    transferFee: boolean = false
   ): string {
     // uniswap adds extra digits on even if the token is say 8 digits long
     const amountIn = tokenAmount
@@ -578,6 +594,17 @@ export class UniswapRouterFactory {
 
     switch (routeQuoteTradeContext.uniswapVersion) {
       case UniswapVersion.v2:
+        if (transferFee) {
+          return this._uniswapRouterContractFactoryV2.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            hexlify(amountIn),
+            hexlify(parseEther(ethAmountOutMin)),
+            routeQuoteTradeContext.routePathArray.map((r) =>
+              removeEthFromContractAddress(r)
+            ),
+            this._ethereumAddress,
+            deadline
+          );
+        }
         return this._uniswapRouterContractFactoryV2.swapExactTokensForETH(
           hexlify(amountIn),
           hexlify(parseEther(ethAmountOutMin)),
@@ -657,7 +684,8 @@ export class UniswapRouterFactory {
     tokenAmount: BigNumber,
     tokenAmountMin: BigNumber,
     routeQuoteTradeContext: RouteQuoteTradeContext,
-    deadline: string
+    deadline: string,
+    transferFee: boolean = false
   ): string {
     // uniswap adds extra digits on even if the token is say 8 digits long
     const amountIn = tokenAmount
@@ -669,6 +697,15 @@ export class UniswapRouterFactory {
 
     switch (routeQuoteTradeContext.uniswapVersion) {
       case UniswapVersion.v2:
+        if (transferFee) {
+          return this._uniswapRouterContractFactoryV2.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            hexlify(amountIn),
+            hexlify(amountMin),
+            routeQuoteTradeContext.routePathArray,
+            this._ethereumAddress,
+            deadline
+          );
+        }
         return this._uniswapRouterContractFactoryV2.swapExactTokensForTokens(
           hexlify(amountIn),
           hexlify(amountMin),
@@ -1411,7 +1448,8 @@ export class UniswapRouterFactory {
   private buildRouteQuotesFromResults(
     amountToTrade: BigNumber,
     contractCallResults: ContractCallResults,
-    direction: TradeDirection
+    direction: TradeDirection,
+    fromTrasferFee: boolean
   ): RouteQuote[] {
     const tradePath = this.tradePath();
 
@@ -1459,7 +1497,8 @@ export class UniswapRouterFactory {
                   ],
                   direction,
                   contractCallReturnContext.originalContractCallContext
-                    .reference as UniswapVersion
+                    .reference as UniswapVersion,
+                  fromTrasferFee
                 )
               );
               break;
@@ -1473,7 +1512,8 @@ export class UniswapRouterFactory {
                   ],
                   direction,
                   contractCallReturnContext.originalContractCallContext
-                    .reference as UniswapVersion
+                    .reference as UniswapVersion,
+                  fromTrasferFee
                 )
               );
               break;
@@ -1532,7 +1572,8 @@ export class UniswapRouterFactory {
     callReturnContext: CallReturnContext,
     routeContext: RouteContext,
     direction: TradeDirection,
-    uniswapVersion: UniswapVersion
+    uniswapVersion: UniswapVersion,
+    fromTrasferFee: boolean
   ): RouteQuote {
     const convertQuoteUnformatted = this.getConvertQuoteUnformatted(
       callReturnContext,
@@ -1569,7 +1610,8 @@ export class UniswapRouterFactory {
             amountToTrade,
             new BigNumber(expectedConvertQuoteOrTokenAmountInMaxWithSlippage),
             routeQuoteTradeContext,
-            tradeExpires.toString()
+            tradeExpires.toString(),
+            fromTrasferFee
           )
         : this.generateTradeDataErc20ToErc20Output(
             new BigNumber(expectedConvertQuoteOrTokenAmountInMaxWithSlippage),
@@ -1771,7 +1813,8 @@ export class UniswapRouterFactory {
     callReturnContext: CallReturnContext,
     routeContext: RouteContext,
     direction: TradeDirection,
-    uniswapVersion: UniswapVersion
+    uniswapVersion: UniswapVersion,
+    fromTrasferFee: boolean
   ): RouteQuote {
     const convertQuoteUnformatted = this.getConvertQuoteUnformatted(
       callReturnContext,
@@ -1807,7 +1850,8 @@ export class UniswapRouterFactory {
             amountToTrade,
             new BigNumber(expectedConvertQuoteOrTokenAmountInMaxWithSlippage),
             routeQuoteTradeContext,
-            tradeExpires.toString()
+            tradeExpires.toString(),
+            fromTrasferFee
           )
         : this.generateTradeDataErc20ToEthOutput(
             new BigNumber(expectedConvertQuoteOrTokenAmountInMaxWithSlippage),
